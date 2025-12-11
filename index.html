@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Calculadora de Costos de Transporte</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: #f8f9fa; }
+    .settings-icon {
+      position: fixed;
+      top: 15px;
+      right: 20px;
+      font-size: 28px;
+      cursor: pointer;
+      color: #0d6efd;
+      z-index: 999;
+    }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body class="p-4">
+
+<!-- Ícono Configuración -->
+<div class="settings-icon" data-bs-toggle="modal" data-bs-target="#configModal">⚙️</div>
+
+<div class="container mt-4">
+  <h2 class="mb-4">Calculadora de Costos de Transporte</h2>
+
+  <!-- CAMPOS PRINCIPALES -->
+  <div class="card p-4 shadow-sm mb-4">
+    <!-- PUNTOS -->
+    <div class="row mb-3">
+      <div class="col-md-6">
+        <label class="form-label">Punto de inicio</label>
+        <input type="text" id="puntoInicio" class="form-control" placeholder="Ej: San Salvador">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Punto final</label>
+        <input type="text" id="puntoFinal" class="form-control" placeholder="Ej: La Libertad">
+      </div>
+    </div>
+
+    <!-- KILOMETRAJE -->
+    <div class="row mb-3">
+      <div class="col-md-4">
+        <label class="form-label">Kilometraje</label>
+        <input type="number" id="km" class="form-control" placeholder="Ingrese kms" oninput="actualizarKmFinal()">
+      </div>
+
+      <div class="col-md-4 d-flex align-items-end gap-3">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="tipoViajeOneway" onclick="toggleViaje('one')">
+          <label class="form-check-label" for="tipoViajeOneway">Oneway</label>
+        </div>
+
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="tipoViajeRoundtrip" onclick="toggleViaje('round')">
+          <label class="form-check-label" for="tipoViajeRoundtrip">Round Trip</label>
+        </div>
+      </div>
+
+      <div class="col-md-4 d-flex align-items-end">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="addDeadleg" onclick="actualizarKmFinal()">
+          <label class="form-check-label" for="addDeadleg">Agregar Deadleg</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- KM FINAL -->
+    <div class="row mb-3">
+      <div class="col-md-4">
+        <label class="form-label fw-bold">Kilometraje final calculado</label>
+        <input type="text" id="kmFinal" class="form-control" readonly>
+      </div>
+    </div>
+
+    <!-- DIAS DEL SERVICIO -->
+    <div class="row mb-3">
+      <div class="col-md-4">
+        <label class="form-label">Días de servicio</label>
+        <input type="number" id="diasServicio" min="1" class="form-control" placeholder="1 o más" value="1">
+      </div>
+      <div class="col-md-4">
+        <button class="btn btn-primary mt-4" type="button" onclick="generarTablaDias()">Generar tabla de viáticos</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CAMPOS NUEVOS: PARQUEO Y CARWASH -->
+  <div class="card p-4 shadow-sm mb-4">
+    <h5 class="mb-3">Otros costos del servicio</h5>
+    <div class="row">
+      <div class="col-md-6">
+        <label class="form-label">Monto total por parqueos ($)</label>
+        <input type="number" id="costParqueo" class="form-control" value="0">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Monto total por carwash ($)</label>
+        <input type="number" id="costCarwash" class="form-control" value="0">
+      </div>
+    </div>
+  </div>
+
+  <!-- TABLA DINÁMICA DE VIÁTICOS -->
+  <div id="viaticosContainer" class="card p-4 shadow-sm mb-4 d-none">
+    <h5 class="mb-3">Viáticos del Conductor</h5>
+    <div id="tablaViaticos"></div>
+
+    <div class="mt-3">
+      <label class="form-label fw-bold">Total viáticos del conductor:</label>
+      <input type="text" id="totalViaticos" class="form-control" readonly>
+    </div>
+
+    <button class="btn btn-secondary mt-3" type="button" onclick="calcularViaticos()">Calcular viáticos</button>
+  </div>
+
+  <!-- RESUMEN FINAL -->
+  <div class="card p-4 shadow-sm mb-4">
+    <h4 class="mb-3">Resumen de costos</h4>
+
+    <table class="table table-bordered">
+      <tbody>
+        <tr><th>Combustible</th><td id="rCombustible">$0.00</td></tr>
+        <tr><th>Mantenimiento</th><td id="rMantenimiento">$0.00</td></tr>
+        <tr><th>Honorarios del conductor</th><td id="rHonorarios">$0.00</td></tr>
+        <tr><th>Viáticos y alojamiento</th><td id="rViaticos">$0.00</td></tr>
+        <tr><th>Parqueos</th><td id="rParqueo">$0.00</td></tr>
+        <tr><th>Carwash</th><td id="rCarwash">$0.00</td></tr>
+        <tr><th>Costo fijo por recorrido</th><td id="rCostoFijo">$0.00</td></tr>
+        <tr id="filaDeadleg" style="display:none;"><th>Costo Deadleg</th><td id="rCostoDeadleg">$0.00</td></tr>
+        <tr class="table-primary fw-bold"><th>Total de costos</th><td id="rTotal">$0.00</td></tr>
+      </tbody>
+    </table>
+
+    <button class="btn btn-success" type="button" onclick="calcularResumen()">Calcular resumen</button>
+  </div>
+
+  <!-- PRECIO FINAL -->
+  <div class="card p-4 shadow-sm mb-4">
+    <h4 class="mb-3">Precio final del servicio</h4>
+
+    <div class="row mb-3">
+      <div class="col-md-4">
+        <label class="form-label fw-bold">Porcentaje de utilidad (%)</label>
+        <input type="number" id="pctUtilidad" class="form-control" placeholder="Ej: 20">
+      </div>
+    </div>
+
+    <button class="btn btn-dark mb-3" onclick="calcularPrecioFinal()">Calcular precio final</button>
+
+    <table class="table table-bordered">
+      <tbody>
+        <tr><th>Valor total con utilidad</th><td id="rValorTotal">$0.00</td></tr>
+        <tr><th>Pago a cuenta (2% sobre subtotal)</th><td id="rPagoCuenta">$0.00</td></tr>
+        <tr class="table-success fw-bold"><th>Precio de venta (efectivo)</th><td id="rPrecioVenta">$0.00</td></tr>
+
+        <!-- NUEVA FILA AGREGADA EXACTAMENTE COMO PEDISTE -->
+        <tr class="table-warning fw-bold"><th>Precio de venta (pago con tarjeta)</th><td id="rPrecioTarjeta">$0.00</td></tr>
+
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- MODAL CONFIGURACIÓN -->
+<div class="modal fade" id="configModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Configuración del Sistema</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="row g-3">
+
+          <div class="col-md-6">
+            <label class="form-label">Costo fijo por día ($)</label>
+            <input type="number" id="cfgCostoDia" class="form-control" value="50">
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Honorarios del conductor por día ($)</label>
+            <input type="number" id="cfgHonorariosDia" class="form-control" value="27.78">
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Honorarios conductor por Deadleg ($)</label>
+            <input type="number" id="cfgHonorariosDeadleg" class="form-control" value="11">
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Costo Deadleg ($)</label>
+            <input type="number" id="cfgDeadleg" class="form-control" value="22">
+          </div>
+
+          <div class="col-md-12">
+            <label class="form-label">Modo cálculo combustible</label>
+            <select id="cfgFuelMode" class="form-select" onchange="onFuelModeChange()">
+              <option value="per_km" selected>Por valor unitario por km</option>
+              <option value="per_gallon">Por precio por galón y rendimiento</option>
+            </select>
+          </div>
+
+          <div id="fuelPerKmBlock" class="col-md-6">
+            <label class="form-label">Factor combustible por km ($)</label>
+            <input type="number" id="cfgCombustible" class="form-control" value="0.11" step="0.01">
+          </div>
+
+          <div id="fuelPerGallonBlock" class="col-md-6 hidden">
+            <label class="form-label">Precio por galón ($)</label>
+            <input type="number" id="cfgPrecioGalon" class="form-control" value="5.25" step="0.01">
+          </div>
+
+          <div id="fuelKmPerGallonBlock" class="col-md-6 hidden">
+            <label class="form-label">Rendimiento (km por galón)</label>
+            <input type="number" id="cfgKmPorGalon" class="form-control" value="10" step="0.1">
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Factor mantenimiento por km ($)</label>
+            <input type="number" id="cfgMantenimiento" class="form-control" value="0.07" step="0.01">
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Kilometraje por deadleg</label>
+            <input type="number" id="cfgKmDeadleg" class="form-control" value="110">
+          </div>
+
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-primary" data-bs-dismiss="modal">Guardar configuración</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+/* -------------------------------------------------------
+   FUNCIONES ORIGINALES (kilometraje, combustible, etc.)
+--------------------------------------------------------*/
+document.getElementById('diasServicio').addEventListener('input', generarTablaDias);
+
+function generarTablaDias() {
+  const dias = Math.max(1, parseInt(document.getElementById("diasServicio").value) || 1);
+  const container = document.getElementById("viaticosContainer");
+  container.classList.remove("d-none");
+
+  let tabla = `
+    <table class="table table-bordered">
+      <thead>
+        <tr>
+          <th>Día</th>
+          <th>Desayuno ($4)</th>
+          <th>Almuerzo ($8)</th>
+          <th>Cena ($8)</th>
+          <th>Alojamiento</th>
+          <th>Costo alojamiento ($)</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  for (let i = 1; i <= dias; i++) {
+    tabla += `
+      <tr>
+        <td>Día ${i}</td>
+        <td class="text-center"><input type="checkbox" class="viatico desayuno"></td>
+        <td class="text-center"><input type="checkbox" class="viatico almuerzo"></td>
+        <td class="text-center"><input type="checkbox" class="viatico cena"></td>
+        <td class="text-center"><input type="checkbox" class="alojCheckbox" data-dia="${i}"></td>
+        <td><input type="number" id="alojCosto${i}" class="form-control alojCosto" disabled></td>
+      </tr>
+    `;
+  }
+  tabla += `</tbody></table>`;
+  document.getElementById("tablaViaticos").innerHTML = tabla;
+
+  document.querySelectorAll('.alojCheckbox').forEach(cb => {
+    cb.addEventListener('change', function() {
+      const dia = this.getAttribute('data-dia');
+      const field = document.getElementById('alojCosto' + dia);
+      field.disabled = !this.checked;
+      if (!this.checked) field.value = '';
+    });
+  });
+
+  document.getElementById("totalViaticos").value = "$0.00";
+  document.getElementById("rViaticos").innerText = "$0.00";
+}
+
+function calcularViaticos() {
+  const desayunoCost = 4;
+  const almuerzoCost = 8;
+  const cenaCost = 8;
+
+  let total = 0;
+
+  document.querySelectorAll('.viatico.desayuno').forEach(ch => { if (ch.checked) total += desayunoCost; });
+  document.querySelectorAll('.viatico.almuerzo').forEach(ch => { if (ch.checked) total += almuerzoCost; });
+  document.querySelectorAll('.viatico.cena').forEach(ch => { if (ch.checked) total += cenaCost; });
+
+  document.querySelectorAll('.alojCosto').forEach(inp => {
+    if (!inp.disabled) total += parseFloat(inp.value || 0);
+  });
+
+  document.getElementById("totalViaticos").value = `$${total.toFixed(2)}`;
+  document.getElementById("rViaticos").innerText = `$${total.toFixed(2)}`;
+  return total;
+}
+
+function toggleViaje(tipo) {
+  const one = document.getElementById("tipoViajeOneway");
+  const round = document.getElementById("tipoViajeRoundtrip");
+  if (tipo === "one" && one.checked) round.checked = false;
+  if (tipo === "round" && round.checked) one.checked = false;
+  actualizarKmFinal();
+}
+
+function actualizarKmFinal() {
+  const km = parseFloat(document.getElementById("km").value) || 0;
+  const kmDeadleg = parseFloat(document.getElementById("cfgKmDeadleg").value) || 0;
+  const round = document.getElementById("tipoViajeRoundtrip").checked;
+  const dead = document.getElementById("addDeadleg").checked;
+
+  let kmFinal = km;
+  if (round) kmFinal = km * 2;
+  if (dead) kmFinal += kmDeadleg;
+
+  document.getElementById("kmFinal").value = kmFinal;
+  return kmFinal;
+}
+
+function onFuelModeChange() {
+  const mode = document.getElementById("cfgFuelMode").value;
+  document.getElementById("fuelPerKmBlock").classList.toggle("hidden", mode !== "per_km");
+  document.getElementById("fuelPerGallonBlock").classList.toggle("hidden", mode !== "per_gallon");
+  document.getElementById("fuelKmPerGallonBlock").classList.toggle("hidden", mode !== "per_gallon");
+}
+
+// CÁLCULO PRINCIPAL DE COSTOS
+function calcularResumen() {
+  const kmFinal = actualizarKmFinal();
+
+  const fuelMode = document.getElementById("cfgFuelMode").value;
+  const cfgComb = parseFloat(document.getElementById("cfgCombustible").value) || 0;
+  const cfgPrecioGalon = parseFloat(document.getElementById("cfgPrecioGalon")?.value) || 0;
+  const cfgKmPorGalon = parseFloat(document.getElementById("cfgKmPorGalon")?.value) || 1;
+
+  const cfgMant = parseFloat(document.getElementById("cfgMantenimiento").value) || 0;
+  const dias = Math.max(1, parseInt(document.getElementById("diasServicio").value) || 1);
+  const cfgHonorariosDia = parseFloat(document.getElementById("cfgHonorariosDia").value) || 0;
+  const cfgHonorariosDeadleg = parseFloat(document.getElementById("cfgHonorariosDeadleg").value) || 0;
+  const cfgCostoDia = parseFloat(document.getElementById("cfgCostoDia").value) || 0;
+  const cfgCostoDeadleg = parseFloat(document.getElementById("cfgDeadleg").value) || 0;
+  const deadleg = document.getElementById("addDeadleg").checked;
+
+  const costParqueo = parseFloat(document.getElementById("costParqueo").value) || 0;
+  const costCarwash = parseFloat(document.getElementById("costCarwash").value) || 0;
+
+  let combustible = 0;
+  if (fuelMode === 'per_km') {
+    combustible = kmFinal * cfgComb;
+  } else {
+    combustible = (kmFinal / cfgKmPorGalon) * cfgPrecioGalon;
+  }
+
+  const mantenimiento = kmFinal * cfgMant;
+
+  let honorarios = dias * cfgHonorariosDia;
+  if (deadleg) honorarios += cfgHonorariosDeadleg;
+
+  const costoFijo = dias * cfgCostoDia;
+
+  const viaticos = calcularViaticos();
+
+  let costoDeadleg = 0;
+  if (deadleg) costoDeadleg = cfgCostoDeadleg;
+
+  const total = combustible + mantenimiento + honorarios + viaticos + costParqueo + costCarwash + costoFijo + costoDeadleg;
+
+  document.getElementById("rCombustible").innerText = `$${combustible.toFixed(2)}`;
+  document.getElementById("rMantenimiento").innerText = `$${mantenimiento.toFixed(2)}`;
+  document.getElementById("rHonorarios").innerText = `$${honorarios.toFixed(2)}`;
+  document.getElementById("rViaticos").innerText = `$${viaticos.toFixed(2)}`;
+  document.getElementById("rParqueo").innerText = `$${costParqueo.toFixed(2)}`;
+  document.getElementById("rCarwash").innerText = `$${costCarwash.toFixed(2)}`;
+  document.getElementById("rCostoFijo").innerText = `$${costoFijo.toFixed(2)}`;
+
+  if (deadleg) {
+    document.getElementById("filaDeadleg").style.display = "";
+    document.getElementById("rCostoDeadleg").innerText = `$${costoDeadleg.toFixed(2)}`;
+  } else {
+    document.getElementById("filaDeadleg").style.display = "none";
+    document.getElementById("rCostoDeadleg").innerText = "$0.00";
+  }
+
+  document.getElementById("rTotal").innerText = `$${total.toFixed(2)}`;
+
+  return total;
+}
+
+/* -------------------------------------------------------
+   CÁLCULO FINAL DE PRECIO AL CLIENTE (CORREGIDO)
+--------------------------------------------------------*/
+function calcularPrecioFinal() {
+
+  const totalCostos = calcularResumen();
+  const utilidad = parseFloat(document.getElementById("pctUtilidad").value) || 0;
+
+  const porcentaje = utilidad / 100;
+
+  // Fórmula solicitada EXACTA
+  const valorTotal = totalCostos / (1 - porcentaje);
+
+  // Subtotal sin IVA para pago a cuenta
+  const subtotalSinIVA = valorTotal / 1.13;
+
+  const pagoCuenta = subtotalSinIVA * 0.02;
+
+  // Precio efectivo redondeado hacia arriba
+  const precioVenta = Math.ceil(valorTotal + pagoCuenta);
+
+  // Precio con tarjeta usando formula que diste: dividir entre 0.948
+  const precioTarjeta = Math.ceil((valorTotal + pagoCuenta) / 0.948);
+
+  document.getElementById("rValorTotal").innerText = `$${valorTotal.toFixed(2)}`;
+  document.getElementById("rPagoCuenta").innerText = `$${pagoCuenta.toFixed(2)}`;
+  document.getElementById("rPrecioVenta").innerText = `$${precioVenta}`;
+  document.getElementById("rPrecioTarjeta").innerText = `$${precioTarjeta}`;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  generarTablaDias();
+  actualizarKmFinal();
+  onFuelModeChange();
+});
+</script>
+
+</body>
+</html>
